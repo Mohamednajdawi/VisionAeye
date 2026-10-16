@@ -1,0 +1,632 @@
+[
+  {
+    "image_id": "img_f74679f233e2",
+    "scene_description": "Close-up, ground level, street crosswalk. A white car is in motion (motion-blurred) directly adjacent to a pedestrian's leg/foot, within less than 1 meter, at a marked crosswalk with wet pavement and autumn leaves.",
+    "golden_decision": "BLOCK",
+    "golden_hazard_binary": 1,
+    "hazard_type_golden": "moving_vehicle",
+    "has_signal": false,
+    "confidence": "high",
+    "rationale": "Moving vehicle in immediate proximity (<1m) to the pedestrian's path at a crosswalk. Classic near-miss / vehicle-in-path hazard.",
+    "annotator": "senior_ml_eng_manual_review"
+  },
+  {
+    "image_id": "img_612c0c24de4a",
+    "scene_description": "Indoor stairwell, white walls, descending staircase with handrail on the left, glass railing on the right, tiled steps leading down to a landing. No people, no obstacles, clear path with a handrail present.",
+    "golden_decision": "BLOCK",
+    "golden_hazard_binary": 1,
+    "hazard_type_golden": "stairs_or_drop",
+    "has_signal": false,
+    "confidence": "high",
+    "rationale": "Descending staircase directly in the forward path is an unmarked drop/step-edge hazard. Handrail mitigates but does not eliminate fall risk.",
+    "annotator": "senior_ml_eng_manual_review"
+  },
+  {
+    "image_id": "img_d87b17a06c5c",
+    "scene_description": "Open pedestrian plaza/open square, flat level ground, no immediate vehicles, obstacles, or drops in the direct forward path. Wide open walkable area.",
+    "golden_decision": "WALK",
+    "golden_hazard_binary": 0,
+    "hazard_type_golden": "none",
+    "has_signal": false,
+    "confidence": "high",
+    "rationale": "Flat, open, obstacle-free plaza with no vehicles, steps, or hazards within the immediate path.",
+    "annotator": "senior_ml_eng_manual_review"
+  },
+  {
+    "image_id": "img_5825c1ce4bf8",
+    "scene_description": "Street-level view of tram tracks embedded in pavement, with a tram visible in the scene, tracks running across/along the pedestrian path.",
+    "golden_decision": "BLOCK",
+    "golden_hazard_binary": 1,
+    "hazard_type_golden": "rail_or_track",
+    "has_signal": false,
+    "confidence": "high",
+    "rationale": "Embedded tram rails are a known cane/wheel trip hazard, combined with a moving/present tram as a vehicle-collision risk.",
+    "annotator": "senior_ml_eng_manual_review"
+  },
+  {
+    "image_id": "img_98805445f8be",
+    "scene_description": "Tram stop platform (Rudolfstra\u00dfe, Linz). Covered shelter, bench with seated people, orange trash bin, manhole cover in the walking path, a parked/arriving tram on the tracks to the right, yellow safety line on the platform edge, people standing further ahead.",
+    "golden_decision": "WALK",
+    "golden_hazard_binary": 0,
+    "hazard_type_golden": "none",
+    "has_signal": false,
+    "confidence": "medium",
+    "rationale": "Platform surface directly ahead is level and unobstructed; manhole cover and tram/tracks are to the side, not in the direct forward path.",
+    "annotator": "senior_ml_eng_manual_review"
+  },
+  {
+    "image_id": "img_4e92129d3e3e",
+    "scene_description": "Street-level view behind two pedestrians crossing a marked zebra crosswalk at an intersection. A black sedan is stopped/waiting at the crosswalk edge to the right, a bus is stopped at a stop on the left side of the street beyond the crosswalk. No pedestrian signal visible for this crossing.",
+    "golden_decision": "WALK",
+    "golden_hazard_binary": 0,
+    "hazard_type_golden": "none",
+    "has_signal": false,
+    "confidence": "high",
+    "rationale": "Both vehicles (sedan, bus) are stationary/yielding, not encroaching the crosswalk. Under Austrian StVO SS9 Abs.2, a vehicle correctly stopped at an unsignalized crosswalk is legally required to yield -- this is the expected compliant scene, not a hazard. FINAL label per explicit human review (Mohammad), superseding an earlier HAZARD mislabel.",
+    "annotator": "human_review_mohammad",
+    "label_revision": "v3_final_human_override",
+    "known_issue": "This is the recurring model boundary case: hazard_proximity score has landed at 0.99/1.00/1.03/1.05/1.12/1.20/1.30 across different prompt versions and reruns, straddling every threshold tried. Treat as the canary case for any new prompt/threshold change."
+  },
+  {
+    "image_id": "img_c0550bd18d30",
+    "scene_description": "Street crosswalk scene with a pedestrian signal box visible, small and distant in frame, showing RED (confirmed by manual zoom-in and by zoomed-crop model re-query).",
+    "golden_decision": "WAIT",
+    "golden_hazard_binary": 1,
+    "hazard_type_golden": "none_physical_signal_governs",
+    "has_signal": true,
+    "signal_state_golden": "red",
+    "confidence": "high",
+    "rationale": "Pedestrian signal shows red (don't walk). Under Austrian StVO SS76 Abs.3, pedestrians may only enter the roadway on green at a signal-controlled crossing. Legal hard gate independent of any physical hazard score. Signal icon is only ~15-20px in the full frame -- requires zoomed-crop Stage 2 to read reliably; Stage 1 direct red/green reads are near-zero even when signal_box_present correctly reads high.",
+    "annotator": "senior_ml_eng_manual_review",
+    "known_issue": "signal_box_location often argmaxes to 'none' even when signal_box_present is high and a real grid cell carries meaningful probability (e.g. mid_left=0.27 vs none=0.46 winning). Code must fall back to the highest-probability real cell, not trust the argmax, or Stage 2 silently never fires."
+  },
+  {
+    "image_id": "img_14b9f6784831",
+    "scene_description": "Street crosswalk scene with a pedestrian signal box visible, small and distant in frame, showing GREEN (confirmed by manual zoom-in and by zoomed-crop model re-query). White car parked/stopped at curb to the left, people walking on sidewalk, empty crosswalk.",
+    "golden_decision": "WALK",
+    "golden_hazard_binary": 0,
+    "hazard_type_golden": "none_physical_signal_governs",
+    "has_signal": true,
+    "signal_state_golden": "green",
+    "confidence": "high",
+    "rationale": "Pedestrian signal shows green (walk). Crosswalk itself is empty, no vehicle in the crossing. Parked car at curb is off to the side, not encroaching.",
+    "annotator": "senior_ml_eng_manual_review"
+  },
+  {
+    "image_id": "img_4f0581de1397",
+    "scene_description": "Indoor/outdoor balcony or terrace scene. Tiled floor, clear open walking path down the center, lounge chairs/couch positioned off to the left side (not blocking the center path), a railing visible on the right side.",
+    "golden_decision": "WALK",
+    "golden_hazard_binary": 0,
+    "hazard_type_golden": "none",
+    "has_signal": false,
+    "confidence": "high",
+    "rationale": "Open tiled walkway with nothing in the direct forward path. Furniture is off to the side, not encroaching. First out-of-distribution test case (non-street scene).",
+    "annotator": "senior_ml_eng_manual_review",
+    "known_issue": "hazard_type gave stopped_vehicle an oddly high 0.34 probability (furniture silhouette likely misread as a vehicle shape) despite no vehicle in the scene -- did not affect final decision since hazard_proximity stayed below threshold, but flags a possible miscalibration on indoor/furniture scenes."
+  },
+  {
+    "image_id": "img_13d8b3f02d31",
+    "scene_description": "Indoor office scene. Desk chair positioned in the left foreground, fairly close to center-frame; a pair of sandals on the floor in the near-right foreground. No stairs, rails, vehicles, or signal present.",
+    "golden_decision": "WALK",
+    "golden_hazard_binary": 0,
+    "hazard_type_golden": "none",
+    "has_signal": false,
+    "confidence": "low",
+    "rationale": "Chair is off to the left side, not squarely centered in the forward path; sandals on the floor are a minor trip risk at best, not a must-stop hazard. Labeled WALK but flagged low-confidence / boundary case -- a genuinely ambiguous near-threshold scene, not a clean CLEAR like the balcony image.",
+    "annotator": "senior_ml_eng_manual_review",
+    "model_test": {
+      "prompt_version": "baseline_7of8_fixed_trigger",
+      "hazard_proximity_score": 0.96,
+      "hazard_proximity_probabilities": {
+        "clear": 0.31,
+        "caution": 0.42,
+        "stop": 0.27
+      },
+      "hazard_type_choice": "other_obstacle",
+      "hazard_type_probabilities": {
+        "none": 0.22,
+        "moving_vehicle": 0.01,
+        "stairs_or_drop": 0.1,
+        "rail_or_track": 0.02,
+        "stopped_vehicle": 0.23,
+        "other_obstacle": 0.42
+      },
+      "signal_box_present": 0,
+      "decision": "WALK",
+      "agree_with_golden": true,
+      "note": "Second indoor/furniture scene (after img_4f0581de1397) where hazard_type gives stopped_vehicle an implausibly high probability (0.23 here, 0.34 there) despite zero vehicles present -- confirms a reproducible pattern, not one-off noise: the model appears to apply some vehicle-shape prior to furniture silhouettes (chairs, desks) in indoor scenes. hazard_proximity score (0.96) also landed just under the 1.0 threshold, in the same boundary band as img_4e92129d3e3e (0.99-1.05) -- second confirmed case of a near-threshold ambiguous scene."
+    }
+  },
+  {
+    "image_id": "img_689e3b2ffaa9",
+    "scene_description": "Residential street in Linz, Austria. Parked cars lining both sides of the street (right side especially), clear open asphalt road down the center with manhole covers (flat, not hazards), sidewalk/curb on the left with grass verge, apartment buildings in background. No crossing, no signal, no oncoming traffic.",
+    "golden_decision": "WALK",
+    "golden_hazard_binary": 0,
+    "hazard_type_golden": "none",
+    "has_signal": false,
+    "confidence": "high",
+    "rationale": "Clean, unambiguous clear street scene. Parked vehicles are off to the sides, not encroaching on the center walking path. No crossing or signal involved. Clear WALK case.",
+    "annotator": "senior_ml_eng_manual_review",
+    "model_test": {
+      "prompt_version": "baseline_7of8_fixed_trigger",
+      "hazard_proximity_score": 0.38,
+      "hazard_proximity_probabilities": {
+        "clear": 0.68,
+        "caution": 0.26,
+        "stop": 0.06
+      },
+      "hazard_proximity_confidence": 0.43,
+      "hazard_type_choice": "none",
+      "hazard_type_probabilities": {
+        "none": 0.78,
+        "moving_vehicle": 0.04,
+        "stairs_or_drop": 0.03,
+        "rail_or_track": 0.01,
+        "stopped_vehicle": 0.13,
+        "other_obstacle": 0.01
+      },
+      "signal_box_present": 0,
+      "decision": "WALK",
+      "agree_with_golden": true,
+      "lat_s": 9.792,
+      "note": "Confident, clean correct read on all axes (hp_conf=0.43, htype_conf=0.74 for 'none') -- a solidly unambiguous case, unlike the recent indoor boundary cases. Latency outlier: 9.79s single Stage-1 call, far above the normal 0.7-2s range seen elsewhere, with no Stage 2 fired (signal_box_present=0). Likely API-side load/routing variance, not image-specific -- flag for latency distribution tracking in a larger eval, not a correctness concern."
+    }
+  },
+  {
+    "image_id": "img_0b5b4d7c81ee",
+    "scene_description": "Red/white striped marked crosswalk (unusual styling, park/campus setting) with two pedestrians already walking across it ahead. No vehicles visible anywhere in frame. Trees, manicured hedges, and buildings in the background. No pedestrian signal box present.",
+    "golden_decision": "WALK",
+    "golden_hazard_binary": 0,
+    "hazard_type_golden": "none",
+    "has_signal": false,
+    "confidence": "high",
+    "rationale": "Unsignalized marked crosswalk with no vehicles present at all -- the simplest possible clear case under the stated traffic rule (no signal -> continue without extra caution; here there isn't even a vehicle to worry about). Two pedestrians already crossing safely confirms it.",
+    "annotator": "senior_ml_eng_manual_review",
+    "model_test": {
+      "prompt_version": "baseline_7of8_fixed_trigger",
+      "hazard_proximity_score": 0.47,
+      "hazard_proximity_probabilities": {
+        "clear": 0.64,
+        "caution": 0.25,
+        "stop": 0.11
+      },
+      "hazard_proximity_confidence": 0.3,
+      "hazard_type_choice": "none",
+      "hazard_type_probabilities": {
+        "none": 0.62,
+        "moving_vehicle": 0.03,
+        "stairs_or_drop": 0.07,
+        "rail_or_track": 0.01,
+        "stopped_vehicle": 0.06,
+        "other_obstacle": 0.21
+      },
+      "signal_box_present": 0.01,
+      "decision": "WALK",
+      "agree_with_golden": true,
+      "lat_s": 9.338,
+      "note": "Clean correct read, no boundary ambiguity. 'other_obstacle' got some weight (0.21) likely from the two pedestrians in frame, a minor miscalibration (people are not obstacles in this context) but did not affect the final decision. Second consecutive image with an outlier-slow single Stage-1 call (9.34s, following 9.79s on img_689e3b2ffaa9) -- two in a row suggests a possible transient API-side slowdown rather than per-image variance; worth monitoring if it persists across future tests."
+    }
+  },
+  {
+    "image_id": "img_6d83b490afd0",
+    "scene_description": "Marked crosswalk adjacent to a gas station (Japanese roadside scene). Two cars visible at the gas station/side street to the left, off the crossing. Residential houses in background. No pedestrian signal box visible.",
+    "golden_decision": "WALK",
+    "golden_hazard_binary": 0,
+    "hazard_type_golden": "none",
+    "has_signal": false,
+    "confidence": "high",
+    "rationale": "Crosswalk itself is empty and clear directly ahead; cars are off to the side at the gas station/side street, not encroaching the crossing. No signal present.",
+    "annotator": "senior_ml_eng_manual_review",
+    "model_test": {
+      "prompt_version": "baseline_7of8_fixed_trigger",
+      "hazard_proximity_score": 0.99,
+      "hazard_proximity_probabilities": {
+        "clear": 0.31,
+        "caution": 0.39,
+        "stop": 0.3
+      },
+      "hazard_proximity_confidence": 0.08,
+      "hazard_type_choice": "other_obstacle",
+      "hazard_type_probabilities": {
+        "none": 0.22,
+        "moving_vehicle": 0.14,
+        "stairs_or_drop": 0.09,
+        "rail_or_track": 0.04,
+        "stopped_vehicle": 0.15,
+        "other_obstacle": 0.36
+      },
+      "signal_box_present": 0.02,
+      "decision": "WALK",
+      "agree_with_golden": true,
+      "lat_s": 7.964,
+      "note": "THIRD confirmed case in the 0.96-1.05 hazard_proximity boundary band (alongside img_4e92129d3e3e at 0.99-1.05 and img_13d8b3f02d31 at 0.96) -- all three sit right at the 1.0 threshold with very low confidence (0.08 here). This is now a real cluster, not isolated noise: scenes with off-path vehicles near (but not in) a crosswalk reliably produce near-threshold scores with near-zero confidence. Strong evidence for implementing an explicit uncertainty band (e.g. escalate/re-check for scores in [0.85, 1.15]) rather than a hard single cutoff."
+    }
+  },
+  {
+    "image_id": "img_a50fa309a055",
+    "scene_description": "Marked crosswalk with a metal drainage grate running down the center of the crossing (perpendicular to the stripes). No vehicles in frame. Residential/park setting, winter season (bare trees), low fencing visible. No pedestrian signal box.",
+    "golden_decision": "WALK",
+    "golden_hazard_binary": 0,
+    "hazard_type_golden": "none",
+    "has_signal": false,
+    "confidence": "high",
+    "rationale": "Clean crosswalk, flush drainage grate is flat (not a step/drop), no vehicles present at all. Clear WALK case.",
+    "annotator": "senior_ml_eng_manual_review",
+    "model_test": {
+      "prompt_version": "baseline_7of8_fixed_trigger",
+      "hazard_proximity_score": 0.68,
+      "hazard_proximity_probabilities": {
+        "clear": 0.5,
+        "caution": 0.32,
+        "stop": 0.18
+      },
+      "hazard_proximity_confidence": 0,
+      "hazard_type_choice": "none",
+      "hazard_type_probabilities": {
+        "none": 0.4,
+        "moving_vehicle": 0.03,
+        "stairs_or_drop": 0.15,
+        "rail_or_track": 0.34,
+        "stopped_vehicle": 0.03,
+        "other_obstacle": 0.05
+      },
+      "signal_box_present": 0,
+      "decision": "WALK",
+      "agree_with_golden": true,
+      "lat_s": 4.806,
+      "note": "hazard_type gave rail_or_track unusual weight (0.34, nearly tied with the correct 'none' at 0.40) -- likely the drainage grate's parallel metal slats visually resemble tram rails. Did not flip the final decision since hazard_proximity stayed under threshold, but this is a THIRD distinct hazard_type miscalibration pattern now documented (after the furniture->vehicle and pedestrians->other_obstacle cases): visually-similar-but-benign textures (grates, furniture silhouettes, people) get misassigned to hazard categories at meaningful probability, even when the top choice is still correct."
+    }
+  },
+  {
+    "image_id": "img_b8e09307cddb",
+    "scene_description": "Wide Vienna-style street crosswalk, large close pedestrian signal box clearly visible in the top-right of frame showing a lit RED standing figure. Multiple cars with headlights on waiting at the intersection in the background. Wide, clean crosswalk directly ahead, tactile paving visible in foreground.",
+    "golden_decision": "WAIT",
+    "golden_hazard_binary": 1,
+    "hazard_type_golden": "none_physical_signal_governs",
+    "has_signal": true,
+    "signal_state_golden": "red",
+    "confidence": "high",
+    "rationale": "Pedestrian signal clearly shows red (do-not-walk figure). Per StVO SS76 Abs.3, pedestrians may only cross on green at a signal-controlled crossing. Hard legal gate overrides the otherwise-clear physical path.",
+    "annotator": "senior_ml_eng_manual_review",
+    "model_test": {
+      "prompt_version": "baseline_7of8_fixed_trigger",
+      "hazard_proximity_score": 0.75,
+      "hazard_proximity_probabilities": {
+        "clear": 0.47,
+        "caution": 0.31,
+        "stop": 0.22
+      },
+      "hazard_proximity_confidence": 0,
+      "hazard_type_choice": "none",
+      "hazard_type_probabilities": {
+        "none": 0.58,
+        "moving_vehicle": 0.11,
+        "stairs_or_drop": 0.22,
+        "rail_or_track": 0.02,
+        "stopped_vehicle": 0.04,
+        "other_obstacle": 0.03
+      },
+      "signal_box_present": 1.0,
+      "signal_box_location_stage1": "top_right",
+      "signal_box_location_confidence": 0.96,
+      "stage2_fired": true,
+      "stage2_crop_cell": "top_right",
+      "stage2_red": 1.0,
+      "stage2_green": 0.0,
+      "decision": "WAIT",
+      "agree_with_golden": true,
+      "lat_s": 11.42,
+      "note": "Cleanest, most unambiguous signal-reading case tested so far: large, close, legible signal icon let Stage 1 itself confidently localize the correct grid cell (top_right, 0.96 confidence) without needing the probability-fallback fix -- no 'present=high but location=none' contradiction this time. Stage 2 cleanly confirmed red=1.0. Demonstrates the pipeline works reliably when the signal is large/close, as opposed to the small/distant signal cases (img_c0550bd18d30) that required the location-fallback fix to resolve."
+    }
+  },
+  {
+    "image_id": "img_2c32b3bd8815",
+    "scene_description": "Wide Warsaw-style boulevard crosswalk, wide zebra crossing with tactile paving (truncated dome pattern) at the curb edge. Pedestrian signal clearly visible in top-right of frame showing lit red standing figure. Cars stopped at the intersection in background with brake lights visible. Tree-lined street, grand building facade on the right.",
+    "golden_decision": "WAIT",
+    "golden_hazard_binary": 1,
+    "hazard_type_golden": "none_physical_signal_governs",
+    "has_signal": true,
+    "signal_state_golden": "red",
+    "confidence": "high",
+    "rationale": "Pedestrian signal clearly shows red (do-not-walk figure). Per StVO SS76 Abs.3, must stop regardless of the otherwise-clear physical crossing. Tactile paving is a genuine accessibility feature (curb/crossing-edge warning for blind pedestrians), not a hazard.",
+    "annotator": "senior_ml_eng_manual_review",
+    "model_test": {
+      "prompt_version": "baseline_7of8_fixed_trigger",
+      "hazard_proximity_score": 0.88,
+      "hazard_proximity_probabilities": {
+        "clear": 0.41,
+        "caution": 0.3,
+        "stop": 0.29
+      },
+      "hazard_proximity_confidence": 0,
+      "hazard_type_choice": "none",
+      "hazard_type_probabilities": {
+        "none": 0.53,
+        "moving_vehicle": 0.07,
+        "stairs_or_drop": 0.32,
+        "rail_or_track": 0.01,
+        "stopped_vehicle": 0.04,
+        "other_obstacle": 0.03
+      },
+      "signal_box_present": 1.0,
+      "signal_box_location_stage1": "top_right",
+      "signal_box_location_confidence": 0.72,
+      "stage1_red": 0.38,
+      "stage2_fired": true,
+      "stage2_crop_cell": "top_right",
+      "stage2_red": 1.0,
+      "stage2_green": 0.0,
+      "decision": "WAIT",
+      "agree_with_golden": true,
+      "lat_s": 6.09,
+      "note": "Pipeline working exactly as designed: Stage 1's direct red read was ambiguous (0.38, below the 0.5 threshold) so the system correctly deferred to Stage 2's zoomed crop, which cleanly resolved red=1.0. NEW hazard_type miscalibration pattern: stairs_or_drop got unusual weight (0.32) -- likely the tactile paving (truncated dome accessibility feature) at the curb being partially misread as an actual step/drop hazard. This is subtly different from prior miscalibrations (furniture/grates) since tactile paving is intentionally distinctive-looking; still didn't flip the final decision since 'none' still won the argmax, but worth tracking as a 4th documented hazard_type confusion category."
+    }
+  },
+  {
+    "image_id": "img_e0f19a020581",
+    "scene_description": "Same Warsaw-style boulevard crosswalk as img_2c32b3bd8815, now showing a lit GREEN walking-figure pedestrian signal in the top-right of frame. Empty crossing directly ahead, cars stopped/yielding at the intersection in background. Tactile paving at curb edge.",
+    "golden_decision": "WALK",
+    "golden_hazard_binary": 0,
+    "hazard_type_golden": "none_physical_signal_governs",
+    "has_signal": true,
+    "signal_state_golden": "green",
+    "confidence": "high",
+    "rationale": "Pedestrian signal clearly shows green (walk). Empty crossing, cars yielding. Clean permitted-crossing case.",
+    "annotator": "senior_ml_eng_manual_review",
+    "model_test": {
+      "prompt_version": "baseline_7of8_fixed_trigger_with_uncertainty_band",
+      "hazard_proximity_score": 0.78,
+      "hazard_proximity_probabilities": {
+        "clear": 0.45,
+        "caution": 0.32,
+        "stop": 0.23
+      },
+      "hazard_proximity_confidence": 0,
+      "hazard_type_choice": "none",
+      "hazard_type_probabilities": {
+        "none": 0.65,
+        "moving_vehicle": 0.07,
+        "stairs_or_drop": 0.21,
+        "rail_or_track": 0.02,
+        "stopped_vehicle": 0.03,
+        "other_obstacle": 0.02
+      },
+      "signal_box_present": 1.0,
+      "signal_box_location_stage1": "top_right",
+      "signal_box_location_confidence": 0.5,
+      "stage1_green": 1.0,
+      "stage2_fired": true,
+      "stage2_crop_cell": "top_right",
+      "stage2_red": 0.0,
+      "stage2_green": 1.0,
+      "decision": "WALK",
+      "agree_with_golden": true,
+      "lat_s": 13.61,
+      "note": "LOGIC GAP IDENTIFIED: decision landed correctly on WALK but NOT via the intended green-signal-confirms branch (that branch only fires when hazard_type is in VEHICLE_TYPES; here hazard_type='none' correctly, since no vehicle is in the path, so the branch condition was never met). Instead it fell through to the generic hazard_proximity<threshold check, which happened to also pass. This means a confirmed green signal currently gives NO special override power when hazard_type='none' -- if hazard_proximity had landed in the uncertainty band (0.85-1.15) on a confirmed-green scene, the system would escalate unnecessarily despite the signal already confirming safety. Fix needed: the green-confirmed branch should short-circuit the hazard_proximity band entirely, not require hazard_type to be vehicle-specific. Also repeats the stairs_or_drop/tactile-paving confusion (0.21) seen on img_2c32b3bd8815."
+    }
+  },
+  {
+    "image_id": "img_8ff983450915",
+    "scene_description": "Warsaw-style boulevard crosswalk (different angle/distance from img_e0f19a020581), wide zebra crossing with tactile paving at curb edge. Pedestrian signal clearly visible top-center of frame showing lit GREEN walking figure. Cars stopped/waiting with headlights on to the left, off the crossing path. Tree-lined street, grand building facade on the right.",
+    "golden_decision": "WALK",
+    "golden_hazard_binary": 0,
+    "hazard_type_golden": "none_physical_signal_governs",
+    "has_signal": true,
+    "signal_state_golden": "green",
+    "confidence": "high",
+    "rationale": "Pedestrian signal clearly shows green. Empty crossing, cars waiting off the path. Clean permitted-crossing case.",
+    "annotator": "senior_ml_eng_manual_review",
+    "model_test": {
+      "prompt_version": "baseline_7of8_fixed_trigger_reverted_single_threshold",
+      "hazard_proximity_score": 0.72,
+      "hazard_proximity_probabilities": {
+        "clear": 0.49,
+        "caution": 0.3,
+        "stop": 0.21
+      },
+      "hazard_proximity_confidence": 0,
+      "hazard_type_choice": "none",
+      "hazard_type_probabilities": {
+        "none": 0.67,
+        "moving_vehicle": 0.11,
+        "stairs_or_drop": 0.13,
+        "rail_or_track": 0.02,
+        "stopped_vehicle": 0.05,
+        "other_obstacle": 0.02
+      },
+      "signal_box_present": 1.0,
+      "signal_box_location_stage1": "top_center",
+      "signal_box_location_confidence": 0.41,
+      "stage1_green": 1.0,
+      "stage2_fired": true,
+      "stage2_crop_cell": "top_center",
+      "stage2_red": 0.0,
+      "stage2_green": 1.0,
+      "decision": "WALK",
+      "agree_with_golden": true,
+      "lat_s": 6.68,
+      "note": "Tested on the REVERTED single-hard-threshold baseline (no uncertainty band -- that idea is parked, not yet implemented here). Same green-signal logic gap as img_e0f19a020581: decision landed correctly by coincidence (hp=0.72 was already comfortably clear) rather than via a dedicated signal-confirms branch, since hazard_type='none' never satisfies the current VEHICLE_TYPES-only green-override condition. Gap still unfixed in this reverted version by design -- noted for whenever the escalation-tier work resumes."
+    }
+  },
+  {
+    "image_id": "img_a90267e6848a",
+    "scene_description": "Wide Linz intersection, wet pavement, pedestrian signal clearly visible on pole in mid-frame showing lit GREEN walking figure. A pedestrian is already crossing the marked crosswalk ahead. A white delivery truck and other vehicles are visible on the cross-street, not encroaching the crossing path. Construction barriers and trees in background.",
+    "golden_decision": "WALK",
+    "golden_hazard_binary": 0,
+    "hazard_type_golden": "none_physical_signal_governs",
+    "has_signal": true,
+    "signal_state_golden": "green",
+    "confidence": "high",
+    "rationale": "Pedestrian signal clearly green, confirmed by a pedestrian already safely crossing. Truck and other vehicles are on the cross-street, not in the crossing path. Clean permitted-crossing case.",
+    "annotator": "senior_ml_eng_manual_review",
+    "model_test": {
+      "prompt_version": "baseline_7of8_fixed_trigger_reverted_single_threshold",
+      "hazard_proximity_score": 0.88,
+      "hazard_proximity_probabilities": {
+        "clear": 0.37,
+        "caution": 0.38,
+        "stop": 0.25
+      },
+      "hazard_proximity_confidence": 0.07,
+      "hazard_type_choice": "other_obstacle",
+      "hazard_type_probabilities": {
+        "none": 0.34,
+        "moving_vehicle": 0.06,
+        "stairs_or_drop": 0.03,
+        "rail_or_track": 0.01,
+        "stopped_vehicle": 0.1,
+        "other_obstacle": 0.46
+      },
+      "signal_box_present": 0.98,
+      "signal_box_location_stage1": "mid_center",
+      "signal_box_location_confidence": 0.46,
+      "stage1_green": 0.01,
+      "stage2_fired": true,
+      "stage2_crop_cell": "mid_center",
+      "stage2_red": 0.0,
+      "stage2_green": 0.98,
+      "decision": "WALK",
+      "agree_with_golden": true,
+      "lat_s": 3.26,
+      "note": "hazard_proximity (0.88) sits close to but still under the 1.0 threshold, likely reflecting the truck's visible presence nearby even though it is not actually encroaching the crossing path -- NOT in the confirmed 0.95-1.05 boundary cluster, so no escalation concern under current logic. Stage 1 green read was highly ambiguous (0.01) despite the signal being clearly visible and legible to a human -- correctly triggered Stage 2 fallback, which cleanly resolved green=0.98. Another confirmation that Stage 1's direct color reads are unreliable even on reasonably-sized/legible signals, and the two-stage pipeline is doing real, necessary work, not just handling edge cases."
+    }
+  },
+  {
+    "image_id": "img_06db482b40b9",
+    "scene_description": "Linz tram crossing with multiple tram rail tracks running directly across the forward path. Pedestrian signal pole to the right clearly showing lit RED standing figure, mounted below a red 'no entry' road sign. Construction fencing and a 'men working' warning triangle to the left. Wet pavement, overcast weather.",
+    "golden_decision": "WAIT",
+    "golden_hazard_binary": 1,
+    "hazard_type_golden": "rail_or_track",
+    "has_signal": true,
+    "signal_state_golden": "red",
+    "confidence": "high",
+    "rationale": "Two independent reasons to stop: (1) tram tracks run directly across the forward path, a genuine physical hazard; (2) pedestrian signal clearly shows red. Both the physical-hazard gate and the signal gate correctly agree here.",
+    "annotator": "senior_ml_eng_manual_review",
+    "model_test": {
+      "prompt_version": "baseline_7of8_fixed_trigger_reverted_single_threshold",
+      "hazard_proximity_score": 1.34,
+      "hazard_proximity_probabilities": {
+        "clear": 0.25,
+        "caution": 0.16,
+        "stop": 0.59
+      },
+      "hazard_proximity_confidence": 0.01,
+      "hazard_type_choice": "rail_or_track",
+      "hazard_type_probabilities": {
+        "none": 0.09,
+        "moving_vehicle": 0.02,
+        "stairs_or_drop": 0.19,
+        "rail_or_track": 0.66,
+        "stopped_vehicle": 0.03,
+        "other_obstacle": 0.01
+      },
+      "signal_box_present": 0.96,
+      "signal_box_location_stage1": "mid_right",
+      "signal_box_location_confidence": 0.8,
+      "stage1_red": 0.32,
+      "stage2_fired": true,
+      "stage2_crop_cell": "mid_right",
+      "stage2_red": 1.0,
+      "stage2_green": 0.0,
+      "decision": "WAIT",
+      "agree_with_golden": true,
+      "lat_s": 4.47,
+      "note": "Rare case where BOTH independent gates (physical hazard_proximity=1.34, well above threshold on its own; and confirmed red signal=1.0) agree on WAIT -- a good stress test of the branch-priority question (does red check or hazard_proximity check matter more when both fire), though since both agree here it doesn't actually surface a disagreement. hazard_type correctly identified rail_or_track (0.66) as the dominant hazard, distinct from the vehicle/furniture/tactile-paving confusions seen on other images -- genuine tram rails were read correctly with reasonable confidence (0.59)."
+    }
+  },
+  {
+    "image_id": "img_cad2a15221e5",
+    "scene_description": "Linz crosswalk with pedestrian signal clearly visible on pole showing lit RED standing figure. Empty crosswalk directly ahead. A black VW Golf is crossing the intersection to the right, not in the crosswalk path. A 'Mein Regional' branded tram is visible in the background on its own tram track, also not encroaching the crosswalk. Trees and street lamps in background, overcast sky.",
+    "golden_decision": "WAIT",
+    "golden_hazard_binary": 1,
+    "hazard_type_golden": "none_physical_signal_governs",
+    "has_signal": true,
+    "signal_state_golden": "red",
+    "confidence": "high",
+    "rationale": "Pedestrian signal clearly shows red. Crosswalk itself is empty and the car/tram visible are not encroaching the crossing path -- red signal is the sole deciding factor here.",
+    "annotator": "senior_ml_eng_manual_review",
+    "model_test": {
+      "prompt_version": "baseline_7of8_fixed_trigger_reverted_single_threshold",
+      "hazard_proximity_score": 0.99,
+      "hazard_proximity_probabilities": {
+        "clear": 0.37,
+        "caution": 0.27,
+        "stop": 0.36
+      },
+      "hazard_proximity_confidence": 0,
+      "hazard_type_choice": "none",
+      "hazard_type_probabilities": {
+        "none": 0.49,
+        "moving_vehicle": 0.37,
+        "stairs_or_drop": 0.03,
+        "rail_or_track": 0.02,
+        "stopped_vehicle": 0.07,
+        "other_obstacle": 0.02
+      },
+      "signal_box_present": 0.99,
+      "signal_box_location_stage1": "none",
+      "signal_box_location_confidence": 0.36,
+      "stage1_red": 0,
+      "stage2_fired": true,
+      "stage2_crop_cell": "mid_right",
+      "stage2_red": 0.93,
+      "stage2_green": 0.0,
+      "decision": "WAIT",
+      "agree_with_golden": true,
+      "lat_s": 2.54,
+      "note": "4th image to land at hazard_proximity~0.99, right in the documented boundary band (alongside img_4e92129d3e3e, img_13d8b3f02d31, img_6d83b490afd0) -- but here it doesn't matter for correctness since the red-signal check fires FIRST in the decision logic and short-circuits before hazard_proximity is consulted. Good illustration of why signal confirmation is valuable: it sidesteps physical-hazard ambiguity entirely when a clear signal is present. signal_box_location fell back to 'none' at Stage 1 (same recurring present=high/location=none contradiction) but the probability-fallback fix correctly picked mid_right (0.23, second-highest after 'none' at 0.42) and Stage 2 confirmed red=0.93 cleanly."
+    }
+  },
+  {
+    "image_id": "img_926a704ff332",
+    "scene_description": "Night street scene, sidewalk view with pedestrian's own shadow cast ahead, road with crosswalk to the left, parked cars, small distant pedestrian signal (red, low confidence read), no-stopping sign, autumn trees lit by streetlights.",
+    "golden_decision": "WALK",
+    "golden_hazard_binary": 0,
+    "hazard_type_golden": "none",
+    "has_signal": true,
+    "signal_state_golden": "red (low confidence, distant/small)",
+    "confidence": "low - signal read is marginal (0.55 prob, 0.33 confidence), flagged as a genuine edge case not a clean example",
+    "rationale": "CORRECTED by user: person is on a sidewalk (crosswalk_present=0.14, correctly low), not crossing a road -- a distant signal on another street does not govern this path. Original WAIT label was wrong; was an artifact of unconditionally trusting sig_color=red regardless of whether a crossing is actually relevant to this forward path.",
+    "annotator": "pediev_v1.0_live_test",
+    "model_test": {
+      "model": "jev-1.14",
+      "pipeline": "PediJev v1.0",
+      "decision": "WAIT",
+      "hp": 0.37,
+      "htype": "none",
+      "sig_present": 0.56,
+      "sig_color": "red",
+      "sig_color_confidence": 0.33,
+      "box_conf": 0.35,
+      "lat": 1.341,
+      "cost": 0.000189,
+      "agree": null
+    }
+  },
+  {
+    "image_id": "img_be57b1bb16a1",
+    "scene_description": "Night crosswalk near a tram/bus stop, wide zebra crossing, clearly lit red pedestrian signal on a pole, two pedestrians waiting near a pillar, illuminated transit shelter with ads and bench on the right, parked tram.",
+    "golden_decision": "WAIT",
+    "golden_hazard_binary": 0,
+    "hazard_type_golden": "none",
+    "has_signal": true,
+    "signal_state_golden": "red (clear, well-lit)",
+    "confidence": "high - signal is bright, close, and legible",
+    "rationale": "Tested live by user via PediJev v1.0. Clean correct WAIT: red signal clearly read (0.78 prob, 0.67 confidence), hazard_proximity correctly low (0.33), tram/pedestrians/bench correctly not flagged as path hazards.",
+    "annotator": "pediev_v1.0_live_test",
+    "model_test": {
+      "model": "jev-1.14",
+      "pipeline": "PediJev v1.0",
+      "decision": "WAIT",
+      "hp": 0.33,
+      "htype": "none",
+      "sig_present": 0.38,
+      "sig_color": "red",
+      "sig_color_confidence": 0.67,
+      "box_conf": 0.34,
+      "lat": 1.508,
+      "cost": 0.000189,
+      "agree": true
+    }
+  }
+]
