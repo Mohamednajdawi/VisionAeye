@@ -19,9 +19,40 @@ data/
                         and the model's own test result for each
   video1_frames/        41 frames (0.5s apart, 20.67s clip) -- first test video
   video2_frames/        41 frames (0.5s apart, 20.67s clip) -- second test video
+prompts/
+  pediev_v1_1.json       the model-facing prompt as pure data: model id,
+                          state text, and typed questions. No code. Swap or
+                          A/B test prompt versions by adding a new file here
+                          and pointing --prompt at it -- the pipeline never
+                          needs to change.
 pipeline/
-  pediev_pipeline.py    the locked PediJev v1.1 pipeline: prompt + decision code
+  pediev_pipeline.py    model-agnostic API client + the decision engine
+                          (decide()). Loads a prompt file at runtime; every
+                          go/no-go threshold that turns model answers into
+                          WALK/WAIT/BLOCK lives here in code, not in the
+                          prompt -- reviewable and testable independently of
+                          prompt wording.
 ```
+
+### Why the prompt and the pipeline are split
+
+- **The prompt is config, not code.** `prompts/pediev_v1_1.json` is pure
+  JSON: model id, state text, typed questions. It has no logic in it.
+  Changing a question's wording, adding a new question, or testing a
+  different model entirely is a data change, with no risk of touching
+  the decision logic.
+- **The decision engine is the one place that can be unsafe or unsafe-fixed.**
+  `decide()` in `pipeline/pediev_pipeline.py` owns every WALK/WAIT/BLOCK
+  threshold. It is unit-testable against recorded model answers without
+  calling the API, and it is the one function that needs review when a
+  safety bug like the sidewalk/signal issue (see commit history) is
+  found or fixed.
+- **Coupling is explicit, not hidden.** `decide()` documents the exact
+  question names it depends on (`hazard_proximity`, `hazard_type`,
+  `crosswalk_present`, `signal_box_present`, `pedestrian_signal_color`).
+  A new prompt version that renames or drops one of these needs a
+  matching update to `decide()` -- this is a known, visible dependency,
+  not a silent one.
 
 Note: the original `.mov` source files are not included (ephemeral cache,
 expired before this export) -- only the extracted frames, which are what
@@ -47,6 +78,8 @@ every reported result in this repo was actually tested against.
 ```bash
 export OPENROUTER_API_KEY=...
 python pipeline/pediev_pipeline.py data/images/img_f74679f233e2.jpg
+# or explicitly pick a prompt version:
+python pipeline/pediev_pipeline.py data/images/img_f74679f233e2.jpg --prompt prompts/pediev_v1_1.json
 ```
 
 Prints the full decision JSON: `decision`, raw model `answers` (hazard

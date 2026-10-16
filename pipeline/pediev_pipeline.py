@@ -1,167 +1,60 @@
 """
-PediJev v1.1 -- production hazard-detection pipeline for a blind-pedestrian
-smart-glasses prototype. Single model (jev-1.14 via OpenRouter Decisions
-API), single call per frame. See README.md for full context and results.
+PediJev -- production hazard-detection pipeline for a blind-pedestrian
+smart-glasses prototype.
+
+Architecture (deliberately split):
+  prompts/<version>.json   -- the model-facing prompt: state text, model
+                               id, and typed questions. Pure data, no code.
+                               Swap/A-B test versions without touching this file.
+  pipeline/pediev_pipeline.py (this file) -- the model-agnostic API client
+                               plus the decision engine. Every threshold
+                               that turns model answers into WALK/WAIT/BLOCK
+                               lives here, in code, reviewable and testable
+                               independently of prompt wording.
+
+Usage:
+    python pediev_pipeline.py <image.jpg> [--prompt prompts/pediev_v1_1.json]
 """
-import json, os, time
-import urllib.request, urllib.error
+import argparse
+import base64
+import json
+import os
+import time
+import urllib.error
+import urllib.request
 
-OPENROUTER_API_KEY = os.environ["OPENROUTER_API_KEY"]
 DECISIONS_ENDPOINT = "https://openrouter.ai/api/alpha/decisions"
-MODEL = "jev-1.14"
-
-STATE_TEXT = (
-    "Single frame from a chest-height camera worn by a blind or low-vision "
-    "pedestrian, facing their walking direction. The 'forward path' is the "
-    "strip of ground directly ahead: about shoulder width (~1 m) and about "
-    "5 m long. In the image it runs from the bottom-center of the frame "
-    "toward the vanishing point. These answers trigger spoken warnings, so "
-    "missing a hazard is far worse than a false alarm."
+DEFAULT_PROMPT_PATH = os.path.join(
+    os.path.dirname(__file__), "..", "prompts", "pediev_v1_1.json"
 )
 
-QUESTIONS = {
-    "scene_assessable": {
-        "type": "noul",
-        "instructions": (
-            "Is this photo usable for judging the scene? Answer no only for "
-            "camera problems: most of the frame is motion-blurred, too dark, "
-            "overexposed, or covered by a hand, finger, or clothing. Answer "
-            "yes if the photo is clear, even when a vehicle, person, or "
-            "object blocks the view of the ground."
-        ),
-    },
-    "hazard_proximity": {
-        "type": "score",
-        "instructions": (
-            "How directly does a physical hazard (vehicle, step or drop, "
-            "rail or track, or obstacle) intrude into the forward path? "
-            "Judge only the forward path, not the whole scene. Ignore "
-            "traffic lights and signs. For a moving vehicle, judge where it "
-            "is heading, not only where it is now. If unsure between two "
-            "levels, choose the higher one."
-        ),
-        "criteria": [
-            "clear: Nothing is in or entering the forward path. Any hazards "
-            "are clearly off to the side or more than about 5 m ahead.",
-            "caution: A hazard is at the edge of the forward path or about "
-            "2 to 5 m ahead, or a vehicle is moving toward the path but is "
-            "not in it yet. The person can continue with care.",
-            "stop: A hazard occupies or crosses the forward path within "
-            "about 2 m (one or two steps). The person must stop or change "
-            "direction now.",
-        ],
-    },
-    "hazard_type": {
-        "type": "choice",
-        "instructions": (
-            "What physical hazard, if any, is in or entering the forward "
-            "path? Look at the scene first; answer none when the path is "
-            "open. Only if two or more different hazards are clearly in the "
-            "path, pick the more dangerous one, with a moving vehicle above "
-            "any other type."
-        ),
-        "options": [
-            "none", "moving_vehicle", "stairs_or_drop", "rail_or_track",
-            "stopped_vehicle", "other_obstacle",
-        ],
-        "criteria": {
-            "none": "Nothing in or entering the forward path.",
-            "moving_vehicle": (
-                "A car, bus, tram, bike, or scooter in motion that is in, "
-                "crossing, or heading into the forward path."
-            ),
-            "stairs_or_drop": (
-                "Actual stairs, a platform edge, a ledge, or a raised step "
-                "of at least ankle height in the forward path. A lowered "
-                "or flush curb at a marked crossing, painted crossing "
-                "stripes, and flat road surface are not drops."
-            ),
-            "rail_or_track": (
-                "Tram rails or train tracks running across or along the "
-                "forward path."
-            ),
-            "stopped_vehicle": (
-                "A parked or waiting vehicle that occupies or partly "
-                "blocks the forward path."
-            ),
-            "other_obstacle": (
-                "Any other physical object that blocks or narrows the "
-                "forward path, such as a pole, bin, sign, barrier, "
-                "bollard, or person."
-            ),
-        },
-    },
-    "crosswalk_present": {
-        "type": "noul",
-        "instructions": (
-            "Is the forward path a marked pedestrian crosswalk (zebra "
-            "stripes, a raised/colored crossing, or similar official "
-            "crossing markings)? Answer yes even if a vehicle or signal is "
-            "also present."
-        ),
-    },
-    "signal_box_present": {
-        "type": "noul",
-        "instructions": (
-            "Is a dedicated pedestrian crossing signal visible anywhere in "
-            "the image? It is a small rectangular light box mounted on a "
-            "pole, distinct from the large vehicle traffic lights. Answer "
-            "yes even if it is small or distant and you cannot read its "
-            "symbol or tell which light is lit."
-        ),
-    },
-    "pedestrian_signal_color": {
-        "type": "choice",
-        "instructions": (
-            "If a pedestrian crossing signal is visible, what color/symbol "
-            "is it currently showing? If no signal is visible, or it is "
-            "visible but you genuinely cannot tell the color (e.g. too "
-            "small, glare, angle), answer 'unclear'."
-        ),
-        "options": ["red", "green", "unclear"],
-        "criteria": {
-            "red": (
-                "The signal shows a lit red light or a red/orange standing "
-                "human figure ('do not walk')."
-            ),
-            "green": (
-                "The signal shows a lit green light or a green/white "
-                "walking human figure ('walk')."
-            ),
-            "unclear": (
-                "No pedestrian signal is visible, or one is visible but "
-                "its color cannot be determined."
-            ),
-        },
-    },
-    "signal_box": {
-        "type": "box",
-        "instructions": (
-            "the pedestrian crossing signal box (small rectangular light "
-            "box on a pole, showing a walking or standing human figure "
-            "icon), if visible anywhere in the image"
-        ),
-    },
-}
 
-T_STOP = 1.0
+def load_prompt(prompt_path: str = DEFAULT_PROMPT_PATH) -> dict:
+    """Load a versioned prompt spec: {version, model, state_text, questions}."""
+    with open(prompt_path, "r", encoding="utf-8") as f:
+        spec = json.load(f)
+    for required in ("model", "state_text", "questions"):
+        if required not in spec:
+            raise ValueError(f"Prompt file {prompt_path} missing required field: {required}")
+    return spec
 
 
-def call_jev(image_b64: str, timeout: int = 60):
-    """One Decisions API call. Returns (status, latency_s, parsed_json_or_None, raw_body)."""
+def call_jev(image_b64: str, prompt_spec: dict, api_key: str, timeout: int = 60):
+    """One Decisions API call using the given prompt spec.
+    Returns (status, latency_s, parsed_json_or_None, raw_body)."""
     payload = {
-        "model": MODEL,
+        "model": prompt_spec["model"],
         "state": [
-            {"type": "text", "text": STATE_TEXT},
+            {"type": "text", "text": prompt_spec["state_text"]},
             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}},
         ],
-        "questions": QUESTIONS,
+        "questions": prompt_spec["questions"],
     }
     req = urllib.request.Request(
         DECISIONS_ENDPOINT,
         data=json.dumps(payload).encode("utf-8"),
         headers={
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
             "TypeSafe-Danger-Zone-Images": "true",  # required for image + box questions
         },
@@ -180,10 +73,26 @@ def call_jev(image_b64: str, timeout: int = 60):
     return status, lat, parsed, body
 
 
+T_STOP = 1.0
+
+
 def decide(answers: dict) -> str:
     """
-    PediJev v1.1 decision logic. Model perceives (via `answers`), code
-    decides. All thresholds live here, not in the prompt.
+    PediJev v1.1 decision engine. Model perceives (via `answers`), code
+    decides. Every go/no-go threshold lives here, not in the prompt --
+    tunable and auditable without touching the model-facing text.
+
+    This function is intentionally decoupled from the prompt file: it
+    only depends on the QUESTION NAMES below being present in `answers`
+    with the shapes the Decisions API returns (noul/score/choice/box).
+    If a future prompt version renames or drops a question, this
+    function needs a matching update -- that coupling is explicit, not
+    hidden.
+
+    Required question names: scene_assessable, hazard_proximity,
+    hazard_type, crosswalk_present, signal_box_present,
+    pedestrian_signal_color. (signal_box is captured by the prompt but
+    not currently used here -- see README "known gaps".)
 
     Returns one of: WALK, WAIT, BLOCK, ESCALATE_UNREADABLE.
     """
@@ -249,10 +158,10 @@ def decide(answers: dict) -> str:
     return "WALK"
 
 
-def evaluate_image_b64(image_b64: str):
+def evaluate_image_b64(image_b64: str, prompt_spec: dict, api_key: str) -> dict:
     """Full pipeline: one API call + decision. Returns a dict with
     decision, raw answers, latency, and cost."""
-    status, lat, parsed, raw_body = call_jev(image_b64)
+    status, lat, parsed, raw_body = call_jev(image_b64, prompt_spec, api_key)
     if status != 200:
         return {"decision": "ERROR", "http_status": status, "lat": lat, "raw_body": raw_body}
     decision = decide(parsed["answers"])
@@ -263,19 +172,31 @@ def evaluate_image_b64(image_b64: str):
         "cost": parsed["usage"]["cost"],
         "model": parsed["model"],
         "id": parsed["id"],
+        "prompt_version": prompt_spec.get("version", "unknown"),
     }
 
 
-if __name__ == "__main__":
-    import sys
-    import base64
-
-    if len(sys.argv) != 2:
-        print("Usage: python pediev_pipeline.py <path_to_jpg>")
-        sys.exit(1)
-
-    with open(sys.argv[1], "rb") as f:
+def evaluate_image_file(image_path: str, prompt_path: str = DEFAULT_PROMPT_PATH, api_key: str = None) -> dict:
+    """Convenience wrapper: load an image file + a prompt file, run the pipeline."""
+    api_key = api_key or os.environ["OPENROUTER_API_KEY"]
+    prompt_spec = load_prompt(prompt_path)
+    with open(image_path, "rb") as f:
         b64 = base64.b64encode(f.read()).decode("utf-8")
+    return evaluate_image_b64(b64, prompt_spec, api_key)
 
-    result = evaluate_image_b64(b64)
+
+def main():
+    parser = argparse.ArgumentParser(description="Run the PediJev hazard pipeline on one image.")
+    parser.add_argument("image", help="Path to a JPEG frame")
+    parser.add_argument(
+        "--prompt", default=DEFAULT_PROMPT_PATH,
+        help=f"Path to a prompt JSON file (default: {DEFAULT_PROMPT_PATH})",
+    )
+    args = parser.parse_args()
+
+    result = evaluate_image_file(args.image, args.prompt)
     print(json.dumps(result, indent=2))
+
+
+if __name__ == "__main__":
+    main()
