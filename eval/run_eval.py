@@ -63,22 +63,26 @@ def evaluate_prompt(prompt_path: str, golden: list) -> dict:
             "http_status": result.get("http_status"),
         })
     accuracy = (correct / total * 100) if total else 0.0
+    lats = [p["lat"] for p in per_image if isinstance(p.get("lat"), (int, float))]
+    avg_latency = round(sum(lats) / len(lats), 3) if lats else None
     return {
         "prompt_path": os.path.relpath(prompt_path, REPO_ROOT),
         "correct": correct,
         "total": total,
         "accuracy_pct": round(accuracy, 1),
+        "avg_latency_s": avg_latency,
         "per_image": per_image,
     }
 
 
 def write_github_summary(all_results: list):
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
-    lines = ["## PediJev prompt evaluation\n", "| Prompt | Accuracy | Mismatches |", "|---|---|---|"]
+    lines = ["## PediJev prompt evaluation\n", "| Prompt | Accuracy | Avg latency/image | Mismatches |", "|---|---|---|---|"]
     for r in all_results:
         mismatches = [p["image_id"] for p in r["per_image"] if not p["agree"]]
         mismatch_str = ", ".join(mismatches) if mismatches else "-"
-        lines.append(f"| `{r['prompt_path']}` | {r['correct']}/{r['total']} ({r['accuracy_pct']}%) | {mismatch_str} |")
+        lat_str = f"{r['avg_latency_s']}s" if r["avg_latency_s"] is not None else "-"
+        lines.append(f"| `{r['prompt_path']}` | {r['correct']}/{r['total']} ({r['accuracy_pct']}%) | {lat_str} | {mismatch_str} |")
     text = "\n".join(lines) + "\n"
     print("\n" + text)
     if summary_path:

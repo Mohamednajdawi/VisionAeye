@@ -51,10 +51,11 @@ jobs:
           script: |
             const fs = require('fs');
             const results = JSON.parse(fs.readFileSync('eval/results.json', 'utf8'));
-            let body = '## PediJev prompt evaluation\n\n| Prompt | Accuracy | Mismatches |\n|---|---|---|\n';
+            let body = '## PediJev prompt evaluation\n\n| Prompt | Accuracy | Avg latency/image | Mismatches |\n|---|---|---|---|\n';
             for (const r of results) {
               const mismatches = r.per_image.filter(p => !p.agree).map(p => p.image_id);
-              body += `| \`${r.prompt_path}\` | ${r.correct}/${r.total} (${r.accuracy_pct}%) | ${mismatches.join(', ') || '-'} |\n`;
+              const lat = r.avg_latency_s !== null && r.avg_latency_s !== undefined ? `${r.avg_latency_s}s` : '-';
+              body += `| \`${r.prompt_path}\` | ${r.correct}/${r.total} (${r.accuracy_pct}%) | ${lat} | ${mismatches.join(', ') || '-'} |\n`;
             }
             github.rest.issues.createComment({
               issue_number: context.issue.number,
