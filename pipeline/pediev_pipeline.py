@@ -22,6 +22,13 @@ import os
 import time
 import urllib.error
 import urllib.request
+import ssl
+
+try:
+    import certifi
+    _HAS_CERTIFI = True
+except Exception:
+    _HAS_CERTIFI = False
 
 DECISIONS_ENDPOINT = "https://openrouter.ai/api/alpha/decisions"
 DEFAULT_PROMPT_PATH = os.path.join(
@@ -61,13 +68,28 @@ def call_jev(image_b64: str, prompt_spec: dict, api_key: str, timeout: int = 60)
         method="POST",
     )
     t0 = time.time()
+    # Build an SSL context using certifi when available so macOS/python
+    # installations missing system CAs can still verify server certs.
+    if _HAS_CERTIFI:
+        ssl_context = ssl.create_default_context(cafile=certifi.where())
+    else:
+        ssl_context = ssl.create_default_context()
+
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout, context=ssl_context) as resp:
             body = resp.read().decode("utf-8")
             status = resp.status
     except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8")
+        # Server returned an error code with a response body
+        try:
+            body = e.read().decode("utf-8")
+        except Exception:
+            body = str(e)
         status = e.code
+    except urllib.error.URLError as e:
+        # Network/SSL-level error (e.g. certificate verification failure)
+        body = str(e)
+        status = None
     lat = round(time.time() - t0, 3)
     parsed = json.loads(body) if status == 200 else None
     return status, lat, parsed, body
