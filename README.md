@@ -114,10 +114,58 @@ python eval/run_eval.py --fail-under 95       # exit 1 if any prompt scores belo
 
 | Version | Model | Accuracy on golden dataset (23 images) |
 |---|---|---|
-| `pediev_v1_1.json` | jev-1.14 | 23/23 (100%) -- **current production** |
+| `pediev_v1_1.json` | jev-1.14 | 23/23 (100%) |
 | `pediev_v1_2.json` | liquid/d1-ultra | 19/23 (82.6%) -- evaluated, not promoted (regresses on 3 previously-correct images plus the known boundary case) |
 
+(Dataset has since grown to 35 cases with sampled video frames; see
+`data/golden_dataset.json`.)
 
+## Decision logic changelog
+
+**v1.2 (current `decide()` logic):** four fixes from a senior-engineer
+review of the decision logic's failure modes:
+1. **Fail-safe on malformed input.** `decide()` now validates every
+   required field via `_require()` and raises `MalformedAnswers` ->
+   caught and converted to `ESCALATE_UNREADABLE`. Previously a missing
+   or renamed field (e.g. a future prompt change) would throw an
+   unhandled `KeyError` and crash the whole call with no decision at
+   all; worse, nothing stopped a *partial* read from silently computing
+   a wrong decision. `evaluate_image_b64()` has the same guard at the
+   API-response layer.
+2. **Moving-vehicle emergency check now runs before the red-light
+   check**, not after. Previously, "a car running the red light is
+   entering the crossing" returned WAIT (the red light was checked
+   first); it now correctly returns BLOCK, since an actively moving
+   vehicle in the path is the more urgent condition regardless of what
+   the signal shows.
+3. **Unit tests** (`pipeline/test_pediev_pipeline.py`, 20 cases, zero
+   API calls) assert `decide()`'s behavior against mocked answer
+   dicts. This is the fix for a real methodology gap: every prior
+   "accuracy" number reported here conflated two different things --
+   model perception quality (noisy, changes run to run) and decision
+   logic correctness (deterministic, should never need a live API call
+   to verify). CI now runs these first and they must pass before any
+   money is spent on the live eval.
+4. Documented (not yet fixed): no temporal smoothing across frames, and
+   `signal_box`/`confidence` fields are captured but unused by
+   `decide()`.
+
+**Earlier fix:** an unconditional `sig_color == "red"` check that let
+an irrelevant, distant signal govern a sidewalk-walking decision;
+fixed by adding `crossing_relevant` gating.
+
+## Running the tests
+
+```bash
+# Fast, deterministic, no API key needed:
+python pipeline/test_pediev_pipeline.py -v
+
+# Slow, costs money, hits the live API:
+export OPENROUTER_API_KEY=...
+python eval/run_eval.py
+```
+
+## Design principles
 
 1. **Model perceives, code decides.** Prompts are neutral and atomic
    (no liability framing); every go/no-go threshold lives in

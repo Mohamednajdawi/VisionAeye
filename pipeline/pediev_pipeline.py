@@ -96,20 +96,37 @@ def call_jev(image_b64: str, prompt_spec: dict, api_key: str, timeout: int = 60)
 
 
 T_STOP = 1.0
+DECIDE_LOGIC_VERSION = "1.2"  # bumped independently of prompt versions -- see CHANGELOG in README
+
+
+class MalformedAnswers(ValueError):
+    """Raised when the model's answers dict is missing a required field
+    or has the wrong shape for decide() to safely interpret. Never let
+    this propagate into a WALK -- callers must treat it the same as
+    ESCALATE_UNREADABLE."""
+
+
+def _require(answers: dict, question: str, field: str):
+    try:
+        return answers[question][field]
+    except (KeyError, TypeError, AttributeError) as e:
+        raise MalformedAnswers(f"answers[{question!r}][{field!r}] missing or malformed") from e
 
 
 def decide(answers: dict) -> str:
     """
-    PediJev v1.1 decision engine. Model perceives (via `answers`), code
-    decides. Every go/no-go threshold lives here, not in the prompt --
-    tunable and auditable without touching the model-facing text.
+    PediJev decision engine (logic version: see DECIDE_LOGIC_VERSION).
+    Model perceives (via `answers`), code decides. Every go/no-go
+    threshold lives here, not in the prompt -- tunable and auditable
+    without touching the model-facing text.
 
     This function is intentionally decoupled from the prompt file: it
     only depends on the QUESTION NAMES below being present in `answers`
     with the shapes the Decisions API returns (noul/score/choice/box).
-    If a future prompt version renames or drops a question, this
-    function needs a matching update -- that coupling is explicit, not
-    hidden.
+    If a future prompt version renames or drops a question, decide()
+    raises MalformedAnswers rather than crashing on a KeyError or
+    silently computing a decision from partial data -- that failure
+    mode is fail-SAFE (escalate), not fail-open (walk).
 
     Required question names: scene_assessable, hazard_proximity,
     hazard_type, crosswalk_present, signal_box_present,
@@ -118,12 +135,20 @@ def decide(answers: dict) -> str:
 
     Returns one of: WALK, WAIT, BLOCK, ESCALATE_UNREADABLE.
     """
-    hp = answers["hazard_proximity"]["score"]
-    htype = answers["hazard_type"]["choice"]
-    crosswalk_present = answers["crosswalk_present"]["noul"]
-    sig_present = answers["signal_box_present"]["noul"]
-    sig_color = answers["pedestrian_signal_color"]["choice"]
-    assessable = answers["scene_assessable"]["noul"]
+    try:
+        hp = _require(answers, "hazard_proximity", "score")
+        htype = _require(answers, "hazard_type", "choice")
+        crosswalk_present = _require(answers, "crosswalk_present", "noul")
+        sig_present = _require(answers, "signal_box_present", "noul")
+        sig_color = _require(answers, "pedestrian_signal_color", "choice")
+        assessable = _require(answers, "scene_assessable", "noul")
+    except MalformedAnswers:
+        # Fail SAFE, not fail open: a malformed/incomplete answer set
+        # (schema drift from a prompt change, a truncated API response,
+        # ...) must never silently fall through to a default WALK
+        # computed from partial data. Treat it exactly like an
+        # unreadable camera frame.
+        return "ESCALATE_UNREADABLE"
 
     if assessable < 0.5:
         return "ESCALATE_UNREADABLE"
@@ -145,23 +170,26 @@ def decide(answers: dict) -> str:
         or hp >= 0.5
     )
 
-    if crossing_relevant and sig_color == "red":
-        return "WAIT"
-
-    # Safety exception, checked before the crosswalk rule: a vehicle
-    # actively moving into/through the path has NOT yielded yet, even at
-    # a crosswalk. "Crosswalk -> cars must yield" assumes the car HAS
-    # yielded; a moving vehicle in frame is the one case that doesn't
-    # hold.
+    # Emergency check FIRST, ahead of the red-light WAIT below (logic
+    # v1.2 reorder -- was after the red check in v1.1). A vehicle
+    # actively moving into/through the path has NOT yielded, regardless
+    # of what the pedestrian signal shows. Checking red before this let
+    # "a car running the red light is entering the crossing" silently
+    # downgrade from BLOCK to WAIT, which understates the urgency of an
+    # active collision risk vs. a routine "wait for the light" message.
     if htype == "moving_vehicle" and hp >= T_STOP:
         return "BLOCK"
+
+    if crossing_relevant and sig_color == "red":
+        return "WAIT"
 
     # Marked crosswalk + (no signal OR green) -> walk. Per Austrian StVO
     # Sec9/Sec76: at an unsignalized crosswalk, vehicles are legally
     # required to yield; a stopped/yielding vehicle there is not a
     # hazard. Excludes all non-vehicle hazard types (stairs/rail/
     # obstacle) and moving_vehicle -- a crosswalk doesn't make those
-    # safe.
+    # safe. (moving_vehicle is already handled above and never reaches
+    # here.)
     if (
         crosswalk_present >= 0.5
         and (sig_color == "green" or (sig_color == "unclear" and sig_present < 0.5))
@@ -182,11 +210,32 @@ def decide(answers: dict) -> str:
 
 def evaluate_image_b64(image_b64: str, prompt_spec: dict, api_key: str) -> dict:
     """Full pipeline: one API call + decision. Returns a dict with
-    decision, raw answers, latency, and cost."""
+    decision, raw answers, latency, and cost.
+
+    If the API call fails (non-200), decision is "ERROR" -- a transport
+    failure, not a safety decision; callers must not treat this as
+    WALK. If the call succeeds but `parsed["answers"]` is missing or the
+    wrong shape entirely (not just one malformed field -- decide()
+    already handles that case), decision falls back to
+    ESCALATE_UNREADABLE rather than propagating the exception, for the
+    same fail-safe-not-fail-open reason documented on decide().
+    """
     status, lat, parsed, raw_body = call_jev(image_b64, prompt_spec, api_key)
     if status != 200:
         return {"decision": "ERROR", "http_status": status, "lat": lat, "raw_body": raw_body}
-    decision = decide(parsed["answers"])
+    try:
+        decision = decide(parsed["answers"])
+    except (KeyError, TypeError) as e:
+        return {
+            "decision": "ESCALATE_UNREADABLE",
+            "decision_error": f"{type(e).__name__}: {e}",
+            "answers": parsed.get("answers"),
+            "lat": lat,
+            "cost": parsed.get("usage", {}).get("cost"),
+            "model": parsed.get("model"),
+            "id": parsed.get("id"),
+            "prompt_version": prompt_spec.get("version", "unknown"),
+        }
     return {
         "decision": decision,
         "answers": parsed["answers"],

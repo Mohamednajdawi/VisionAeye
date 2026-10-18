@@ -31,6 +31,10 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Run decide() unit tests (no API calls, must pass before spending on live eval)
+        run: |
+          python pipeline/test_pediev_pipeline.py -v
+
       - name: Run evaluation against the golden dataset
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
