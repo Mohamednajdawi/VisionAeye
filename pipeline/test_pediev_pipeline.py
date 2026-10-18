@@ -26,9 +26,13 @@ def mk_answers(
     crosswalk=0.0,
     sig_present=0.0,
     sig_color="unclear",
+    hp_confidence=None,
 ):
-    """Build a well-formed answers dict in the Decisions API shape."""
-    return {
+    """Build a well-formed answers dict in the Decisions API shape.
+    hp_confidence=None omits the field entirely (decide() must treat
+    that as fully trusted, confidence=1.0, for backward compatibility
+    with prompt versions that don't report it)."""
+    answers = {
         "scene_assessable": {"type": "noul", "noul": scene_assessable},
         "hazard_proximity": {"type": "score", "score": hp},
         "hazard_type": {"type": "choice", "choice": htype},
@@ -36,6 +40,9 @@ def mk_answers(
         "signal_box_present": {"type": "noul", "noul": sig_present},
         "pedestrian_signal_color": {"type": "choice", "choice": sig_color},
     }
+    if hp_confidence is not None:
+        answers["hazard_proximity"]["confidence"] = hp_confidence
+    return answers
 
 
 class TestEscalation(unittest.TestCase):
@@ -147,6 +154,53 @@ class TestPhysicalHazardFallback(unittest.TestCase):
     def test_boundary_hp_just_under_threshold_walks(self):
         a = mk_answers(hp=0.99, htype="other_obstacle", crosswalk=0.0, sig_present=0.0, sig_color="unclear")
         self.assertEqual(decide(a), "WALK")
+
+
+class TestHazardConfidenceGate(unittest.TestCase):
+    """Regression tests for the hazard_proximity confidence gate.
+    Found by diagnosing liquid/d1-ultra's false-BLOCK failures on
+    ambiguous 'other_obstacle' scenes: all 3 had hp confidence 0.00-0.11
+    while every verified true BLOCK (both jev-1.14 and d1-ultra) had hp
+    confidence >= 0.32."""
+
+    def test_low_confidence_hazard_escalates_uncertain_not_block(self):
+        a = mk_answers(hp=1.29, htype="other_obstacle", hp_confidence=0.0)
+        self.assertEqual(decide(a), "ESCALATE_UNCERTAIN")
+
+    def test_low_confidence_hazard_does_not_fall_through_to_walk(self):
+        """Critical: ambiguity about a possible hazard must escalate,
+        never silently resolve to the most permissive answer."""
+        a = mk_answers(hp=1.41, htype="other_obstacle", hp_confidence=0.11)
+        result = decide(a)
+        self.assertNotEqual(result, "WALK")
+        self.assertEqual(result, "ESCALATE_UNCERTAIN")
+
+    def test_high_confidence_hazard_still_blocks(self):
+        a = mk_answers(hp=1.73, htype="stairs_or_drop", hp_confidence=0.58)
+        self.assertEqual(decide(a), "BLOCK")
+
+    def test_confidence_exactly_at_floor_blocks(self):
+        """Floor is inclusive: confidence == HP_CONFIDENCE_FLOOR passes
+        (only strictly below the floor escalates)."""
+        a = mk_answers(hp=1.2, htype="other_obstacle", hp_confidence=0.15)
+        self.assertEqual(decide(a), "BLOCK")
+
+    def test_missing_confidence_field_defaults_to_trusted(self):
+        """Backward compatibility: a prompt version that doesn't report
+        hazard_proximity.confidence must not have every hazard silently
+        escalated -- missing means trusted (confidence=1.0), not
+        untrusted."""
+        a = mk_answers(hp=1.5, htype="stairs_or_drop")  # hp_confidence=None
+        self.assertEqual(decide(a), "BLOCK")
+
+    def test_confidence_gate_does_not_affect_moving_vehicle_fast_path(self):
+        """The moving_vehicle branch has its own strong signal
+        (hazard_type confidence, checked implicitly by the model's own
+        classification) and is NOT subject to the hazard_proximity
+        confidence gate -- that gate only applies to the generic
+        hp>=T_STOP fallback."""
+        a = mk_answers(hp=1.2, htype="moving_vehicle", hp_confidence=0.0)
+        self.assertEqual(decide(a), "BLOCK")
 
 
 if __name__ == "__main__":

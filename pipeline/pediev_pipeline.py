@@ -96,7 +96,8 @@ def call_jev(image_b64: str, prompt_spec: dict, api_key: str, timeout: int = 60)
 
 
 T_STOP = 1.0
-DECIDE_LOGIC_VERSION = "1.2"  # bumped independently of prompt versions -- see CHANGELOG in README
+HP_CONFIDENCE_FLOOR = 0.15  # see decide() docstring + README "hazard_proximity confidence gate"
+DECIDE_LOGIC_VERSION = "1.3"  # bumped independently of prompt versions -- see CHANGELOG in README
 
 
 class MalformedAnswers(ValueError):
@@ -131,9 +132,27 @@ def decide(answers: dict) -> str:
     Required question names: scene_assessable, hazard_proximity,
     hazard_type, crosswalk_present, signal_box_present,
     pedestrian_signal_color. (signal_box is captured by the prompt but
-    not currently used here -- see README "known gaps".)
+    not currently used here -- see README "known gaps".) Also reads
+    `hazard_proximity.confidence` when present (optional -- older
+    answers without it are treated as confidence=1.0, i.e. trusted).
 
-    Returns one of: WALK, WAIT, BLOCK, ESCALATE_UNREADABLE.
+    hazard_proximity confidence gate: a BLOCK triggered by the plain
+    hp>=T_STOP fallback (not the moving_vehicle fast path, which has
+    its own strong signal) is only honored when hazard_proximity's own
+    reported confidence is >= HP_CONFIDENCE_FLOOR. Found by diagnosing
+    liquid/d1-ultra's 3 false-BLOCK failures on ambiguous
+    "other_obstacle" scenes (a yielding car misread as a generic
+    obstacle): all 3 had hp confidence 0.00-0.11, while every verified
+    TRUE BLOCK in the golden dataset (real stairs/car/tram hazards, both
+    jev-1.14 and d1-ultra) had hp confidence >= 0.32. A low-confidence
+    hp>=1.0 reading escalates to ESCALATE_UNCERTAIN instead of either
+    BLOCKing (risk: false positive, erodes trust) or falling through to
+    WALK (risk: the one thing this whole system exists to prevent).
+    ESCALATE_UNCERTAIN is a new, distinct terminal state from
+    ESCALATE_UNREADABLE: the camera/scene was fine, the model is just
+    not sure what it's looking at.
+
+    Returns one of: WALK, WAIT, BLOCK, ESCALATE_UNREADABLE, ESCALATE_UNCERTAIN.
     """
     try:
         hp = _require(answers, "hazard_proximity", "score")
@@ -149,6 +168,13 @@ def decide(answers: dict) -> str:
         # computed from partial data. Treat it exactly like an
         # unreadable camera frame.
         return "ESCALATE_UNREADABLE"
+
+    # hazard_proximity.confidence is optional in older prompt versions;
+    # treat missing as fully trusted so this gate is a no-op on prompts
+    # that don't report it, rather than silently blocking everything.
+    hp_confidence = answers.get("hazard_proximity", {}).get("confidence", 1.0)
+    if hp_confidence is None:
+        hp_confidence = 1.0
 
     if assessable < 0.5:
         return "ESCALATE_UNREADABLE"
@@ -203,6 +229,15 @@ def decide(answers: dict) -> str:
         return "WAIT"
 
     if hp >= T_STOP:
+        # Confidence gate: don't trust a near-threshold hazard score the
+        # model itself flags as a coin-flip. See docstring above for the
+        # evidence (d1-ultra's 3 false positives all had hp confidence
+        # <=0.11; every true positive we've recorded had >=0.32).
+        # Escalates rather than falls through to WALK -- ambiguity about
+        # a possible hazard must never resolve to the most permissive
+        # answer.
+        if hp_confidence < HP_CONFIDENCE_FLOOR:
+            return "ESCALATE_UNCERTAIN"
         return "BLOCK"
 
     return "WALK"

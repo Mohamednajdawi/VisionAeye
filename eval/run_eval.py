@@ -37,8 +37,13 @@ def load_golden():
         return json.load(f)
 
 
+ESCALATION_DECISIONS = {"ESCALATE_UNCERTAIN", "ESCALATE_UNREADABLE"}
+
+
 def evaluate_prompt(prompt_path: str, golden: list) -> dict:
     correct, total = 0, 0
+    confidently_wrong = 0  # disagreed AND picked a different concrete action (WALK/WAIT/BLOCK)
+    honestly_escalated = 0  # disagreed by escalating instead of picking a concrete wrong action
     per_image = []
     for item in golden:
         name = item["image_id"]
@@ -53,11 +58,17 @@ def evaluate_prompt(prompt_path: str, golden: list) -> dict:
         agree = decision == gold
         total += 1
         correct += int(agree)
+        if not agree:
+            if decision in ESCALATION_DECISIONS:
+                honestly_escalated += 1
+            else:
+                confidently_wrong += 1
         per_image.append({
             "image_id": name,
             "golden": gold,
             "decision": decision,
             "agree": agree,
+            "escalated": decision in ESCALATION_DECISIONS,
             "lat": result.get("lat"),
             "cost": result.get("cost"),
             "http_status": result.get("http_status"),
@@ -70,6 +81,8 @@ def evaluate_prompt(prompt_path: str, golden: list) -> dict:
         "correct": correct,
         "total": total,
         "accuracy_pct": round(accuracy, 1),
+        "confidently_wrong": confidently_wrong,
+        "honestly_escalated": honestly_escalated,
         "avg_latency_s": avg_latency,
         "per_image": per_image,
     }
@@ -77,12 +90,21 @@ def evaluate_prompt(prompt_path: str, golden: list) -> dict:
 
 def write_github_summary(all_results: list):
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
-    lines = ["## PediJev prompt evaluation\n", "| Prompt | Accuracy | Avg latency/image | Mismatches |", "|---|---|---|---|"]
+    lines = [
+        "## PediJev prompt evaluation\n",
+        "| Prompt | Accuracy | Confidently wrong | Honestly escalated | Avg latency/image |",
+        "|---|---|---|---|---|",
+    ]
     for r in all_results:
-        mismatches = [p["image_id"] for p in r["per_image"] if not p["agree"]]
-        mismatch_str = ", ".join(mismatches) if mismatches else "-"
         lat_str = f"{r['avg_latency_s']}s" if r["avg_latency_s"] is not None else "-"
-        lines.append(f"| `{r['prompt_path']}` | {r['correct']}/{r['total']} ({r['accuracy_pct']}%) | {lat_str} | {mismatch_str} |")
+        wrong = [p["image_id"] for p in r["per_image"] if not p["agree"] and not p["escalated"]]
+        escalated = [p["image_id"] for p in r["per_image"] if not p["agree"] and p["escalated"]]
+        lines.append(
+            f"| `{r['prompt_path']}` | {r['correct']}/{r['total']} ({r['accuracy_pct']}%) "
+            f"| {r['confidently_wrong']} ({', '.join(wrong) or '-'}) "
+            f"| {r['honestly_escalated']} ({', '.join(escalated) or '-'}) "
+            f"| {lat_str} |"
+        )
     text = "\n".join(lines) + "\n"
     print("\n" + text)
     if summary_path:
@@ -118,7 +140,8 @@ def main():
         result = evaluate_prompt(p, golden)
         for img in result["per_image"]:
             print(f"  {img['image_id']}: golden={img['golden']:6s} decision={img['decision']:10s} agree={img['agree']}")
-        print(f"  -> {result['correct']}/{result['total']} ({result['accuracy_pct']}%)")
+        print(f"  -> {result['correct']}/{result['total']} ({result['accuracy_pct']}%) "
+              f"[confidently_wrong={result['confidently_wrong']} honestly_escalated={result['honestly_escalated']}]")
         all_results.append(result)
 
     with open(os.path.join(os.path.dirname(__file__), "results.json"), "w", encoding="utf-8") as f:
