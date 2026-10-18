@@ -1,0 +1,64 @@
+name: Evaluate PediJev prompts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "prompts/**"
+      - "pipeline/**"
+      - "data/golden_dataset.json"
+      - "eval/**"
+  pull_request:
+    paths:
+      - "prompts/**"
+      - "pipeline/**"
+      - "data/golden_dataset.json"
+      - "eval/**"
+  workflow_dispatch:
+    inputs:
+      fail_under:
+        description: "Minimum accuracy percent required (0 = report-only, never fail)"
+        required: false
+        default: "0"
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run evaluation against the golden dataset
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          python eval/run_eval.py --fail-under "${{ inputs.fail_under || '0' }}"
+
+      - name: Upload full results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: eval/results.json
+
+      - name: Comment on PR with results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const results = JSON.parse(fs.readFileSync('eval/results.json', 'utf8'));
+            let body = '## PediJev prompt evaluation\n\n| Prompt | Accuracy | Mismatches |\n|---|---|---|\n';
+            for (const r of results) {
+              const mismatches = r.per_image.filter(p => !p.agree).map(p => p.image_id);
+              body += `| \`${r.prompt_path}\` | ${r.correct}/${r.total} (${r.accuracy_pct}%) | ${mismatches.join(', ') || '-'} |\n`;
+            }
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });

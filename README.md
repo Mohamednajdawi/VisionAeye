@@ -86,7 +86,38 @@ Prints the full decision JSON: `decision`, raw model `answers` (hazard
 proximity score/type, crosswalk/signal presence, signal color, and the
 signal's bounding box), latency, and cost.
 
-## Design principles
+## CI/CD: automated prompt evaluation
+
+`.github/workflows/eval.yml` runs `eval/run_eval.py` automatically on
+every push or PR that touches `prompts/`, `pipeline/`, or the golden
+dataset. It evaluates every prompt file in `prompts/` against the full
+golden dataset using the exact same `decide()` logic as production, and
+publishes a results table to the GitHub Actions summary (and as a PR
+comment, on pull requests).
+
+Requires an `OPENROUTER_API_KEY` repo secret (Settings -> Secrets and
+variables -> Actions). Run it manually from the Actions tab
+(workflow_dispatch) with an optional `fail_under` accuracy threshold to
+gate merges; the default is report-only (never fails the build) since a
+new prompt is often deliberately exploratory before it's ready to be a
+gate.
+
+```bash
+# Local run, same harness CI uses
+export OPENROUTER_API_KEY=...
+python eval/run_eval.py                      # evaluate every prompt in prompts/
+python eval/run_eval.py --prompt prompts/pediev_v1_2.json
+python eval/run_eval.py --fail-under 95       # exit 1 if any prompt scores below 95%
+```
+
+### Evaluated prompt versions
+
+| Version | Model | Accuracy on golden dataset (23 images) |
+|---|---|---|
+| `pediev_v1_1.json` | jev-1.14 | 23/23 (100%) -- **current production** |
+| `pediev_v1_2.json` | liquid/d1-ultra | 19/23 (82.6%) -- evaluated, not promoted (regresses on 3 previously-correct images plus the known boundary case) |
+
+
 
 1. **Model perceives, code decides.** Prompts are neutral and atomic
    (no liability framing); every go/no-go threshold lives in
