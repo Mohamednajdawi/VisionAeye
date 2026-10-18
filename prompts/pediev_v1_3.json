@@ -1,5 +1,5 @@
 {
-  "version": "pediev-v1.2",
+  "version": "pediev-v1.3",
   "model": "liquid/d1-ultra",
   "state_text": "Single frame from a chest-height camera worn by a blind or low-vision pedestrian, facing their walking direction. The 'forward path' is the strip of ground directly ahead: about shoulder width (~1 m) and about 5 m long. In the image it runs from the bottom-center of the frame toward the vanishing point. These answers trigger spoken warnings, so missing a hazard is far worse than a false alarm.",
   "questions": {
