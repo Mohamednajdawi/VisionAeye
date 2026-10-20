@@ -29,6 +29,32 @@ interrupt-mid-sentence, resume-after-clear, severity escalation
 (WAIT->BLOCK) reannouncement, and queuing an L3 request that arrives
 while a hazard is active.
 
+## What's built: the L2 short-term situational buffer
+
+`pipeline/l2_buffer.py` -- de-flickers L1's per-frame output across a
+rolling 3-second window before it reaches arbitration/speech. Problem
+it fixes, proven empirically earlier in this project: a single camera
+frame can misread a signal, and raw per-frame decisions flickered
+WALK/WAIT every 0.5-1s on an unchanging red light. Fix is
+safety-asymmetric hysteresis: ESCALATING to a more urgent state
+(WALK->WAIT/BLOCK) is instant, on the first frame that reports it;
+DE-ESCALATING (WAIT/BLOCK->WALK) requires 3 consecutive matching,
+less-urgent frames before being trusted. Parameters
+(window_s=3.0, deescalation_frames=3) were tuned by iterating
+`pipeline/simulate_l2_stream.py` against the project's two recorded
+video sequences until flicker was eliminated (12 raw flips -> 4;
+3 raw flips -> 1) WITHOUT masking either video's real transition --
+`deescalation_frames>=6` was tried and rejected because it silently
+hid a real, sustained red-to-green transition.
+
+`pipeline/stream.py` wires L1 -> L2 -> arbitration into one
+`VisionAeyeStream` class with an `on_frame(image_b64, timestamp_s)`
+entry point -- this is the actual "ready for a streaming video"
+interface the rest of the system (camera capture, audio output) plugs
+into. Verified end-to-end against the real recorded frames in
+`data/video1_frames/` (not just simulated decision sequences) via
+`pipeline/real_e2e_test.py`.
+
 ## Repo layout
 
 ```

@@ -36,19 +36,35 @@ TTS/speaker integration), and a decision on debounce if re-announcing
 every tick during a sustained hazard proves annoying in practice
 (deliberately NOT solved at this layer -- see code comments).
 
-### Epic 2 -- Short-term situational memory (L2) -- NEXT
-1. Define the L2 output contract: what "bigger picture" means
-   concretely (hazard trajectory, signal stability) vs L1's instant
-   per-frame answer.
-2. Evaluate true video-input models vs a sliding-window-of-frames fed
-   to a single-image model.
-3. Build a rolling frame buffer feeding L2 without re-architecting L1's
-   per-frame loop.
-4. Define L2->L1 relationship: L2 should never override a BLOCK/WAIT,
-   only add context or smooth a borderline WALK.
-5. Golden dataset v2: short video clips with multi-frame ground truth
-   (current dataset is L1-only, single frames).
-6. Extend `eval/run_eval.py`'s pattern to L2.
+### Epic 2 -- Short-term situational memory (L2) -- BUILT
+`pipeline/l2_buffer.py` (rolling buffer + hysteresis) + `pipeline/stream.py`
+(wires L1 -> L2 -> arbitration). 16 unit tests
+(`pipeline/test_l2_buffer.py`) including replays of the exact flicker
+patterns recorded from this project's live video testing. Tuned via
+`pipeline/simulate_l2_stream.py` against real recorded sequences, then
+verified end-to-end against the real video frame files
+(`pipeline/real_e2e_test.py`), not just simulated decisions.
+
+What shipped: safety-asymmetric hysteresis (instant escalation, 3-frame
+debounced de-escalation) over a 3-second rolling window. This answers
+item 4 from the original Epic 2 plan (L2->L1 relationship: L2 never
+overrides a BLOCK/WAIT with less history than it takes to trust a
+WALK) but NOT the others:
+
+Still open (not built):
+1. L2 currently only smooths L1's categorical decision (WALK/WAIT/BLOCK)
+   over time -- it does NOT yet reason over raw multi-frame visual
+   content (trajectory of a vehicle, "is this person now stationary").
+   That needs either a true video-input model or a richer per-frame
+   feature (e.g. feeding L2 the hazard_proximity score, not just the
+   final decision) -- scoped but not implemented.
+2. Video-input vs sliding-window model evaluation (item 2) -- not done.
+3. Golden dataset v2 with multi-frame ground truth (item 5) -- not done;
+   current golden dataset is still L1-only single frames.
+4. Extending the eval/run_eval.py pattern to L2 (item 6) -- not done;
+   L2 is validated by `test_l2_buffer.py`'s deterministic unit tests
+   and the one real end-to-end video replay, not a golden-dataset CI
+   job yet.
 
 ### Epic 7 -- Evaluation & reliability infra (ONGOING, extend per epic)
 Already built for L1: golden dataset, CI, confidently-wrong vs
