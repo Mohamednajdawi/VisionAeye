@@ -22,7 +22,23 @@ on:
         default: "0"
 
 jobs:
+  unit-tests:
+    # Fast, free, no API key: decision-logic and arbitration-logic
+    # correctness. Runs on every push regardless of what changed, since
+    # both modules are pure Python with no live dependency.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run decide() unit tests
+        run: python pipeline/test_pediev_pipeline.py -v
+      - name: Run arbitration engine unit tests
+        run: python pipeline/test_arbitration.py -v
+
   evaluate:
+    needs: unit-tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,10 +46,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-      - name: Run decide() unit tests (no API calls, must pass before spending on live eval)
-        run: |
-          python pipeline/test_pediev_pipeline.py -v
 
       - name: Run evaluation against the golden dataset
         env:

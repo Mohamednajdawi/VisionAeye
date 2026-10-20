@@ -1,5 +1,13 @@
 # VisionAeye
 
+Full vision: an always-on AI agent for smart glasses that helps a blind
+or low-vision person navigate and interact with the world -- reflexive
+hazard warnings while walking, plus on-demand help ("what's on this
+menu", "where's the oat milk"). See `ROADMAP.md` for the full epic
+breakdown; this README covers what's **built**.
+
+## What's built: the reflex safety layer (L1)
+
 Hazard-detection pipeline for blind/low-vision pedestrians, built on the
 TypeSafe `jev-1.14` Decisions API. Model perceives (typed, calibrated
 questions over a single frame); code decides (WALK / WAIT / BLOCK) via
@@ -8,6 +16,18 @@ auditable thresholds in `pipeline/pediev_pipeline.py`.
 **Current production version: PediJev v1.1** (locked). One model, one
 API call per frame, no two-stage crop/recall. See `pipeline/README.md`
 (below) for the exact prompt, decision logic, and validated results.
+
+## What's built: the arbitration layer
+
+`pipeline/arbitration.py` -- a pure state machine (no model calls) that
+enforces one rule: **L1 (reflex safety) always interrupts L3 (the
+on-demand assistant), with zero exceptions.** Built against a stub L3
+interface before any real conversational assistant exists, specifically
+so the interrupt contract is proven correct before it's ever load-bearing
+in a real feature. 16 unit tests in `pipeline/test_arbitration.py` cover
+interrupt-mid-sentence, resume-after-clear, severity escalation
+(WAIT->BLOCK) reannouncement, and queuing an L3 request that arrives
+while a hazard is active.
 
 ## Repo layout
 
