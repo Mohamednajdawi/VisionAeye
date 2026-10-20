@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from pediev_pipeline import evaluate_image_b64, load_prompt, DEFAULT_PROMPT_PATH  # noqa: E402
 from l2_buffer import L2RollingBuffer  # noqa: E402
 from arbitration import ArbitrationEngine, AudioAction  # noqa: E402
+from l3_assistant import ask_about_image, L3Error  # noqa: E402
 
 
 class VisionAeyeStream:
@@ -50,9 +51,34 @@ class VisionAeyeStream:
             "audio_actions": audio_actions,
         }
 
+    def ask(self, image_b64: str, question: str) -> dict:
+        """User-triggered L3 request: ask a question about the current
+        camera frame ("what's on this menu", "where's the oat milk").
+        Calls the vision-chat model, then routes the result through
+        arbitration exactly like any other L3 output -- if a hazard is
+        active, this gets queued, not spoken over it.
+
+        On an L3 transport failure, speaks an honest failure message
+        rather than going silent -- a silent failure on a question the
+        user explicitly asked is worse than an honest 'could not
+        process that'."""
+        try:
+            result = ask_about_image(image_b64, question, api_key=self.api_key)
+            answer = result["answer"]
+        except L3Error as e:
+            answer = "Sorry, I couldn't process that. Please try again."
+            result = {"answer": answer, "error": str(e)}
+
+        audio_actions = self.arbitration.on_l3_request(answer)
+        return {
+            "l3_result": result,
+            "audio_actions": audio_actions,
+        }
+
     def on_user_request(self, text: str) -> list:
-        """A completed L3 answer (menu text, product location, etc.)
-        ready to be queued for speech. Returns the audio actions."""
+        """Lower-level hook: queue pre-computed L3 text (e.g. from a
+        cached answer or a non-vision L3 source) without calling the
+        vision-chat model. Most callers should use `ask()` instead."""
         return self.arbitration.on_l3_request(text)
 
     def on_l3_speech_done(self) -> None:

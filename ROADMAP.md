@@ -79,10 +79,29 @@ Edge vs cloud split, power/bandwidth budget, adaptive frame rate,
 numbers in a store -- GDPR-relevant in Austria/EU, must be decided
 before building, not after)**.
 
-### Epic 5 -- Conversational assistant (L3)
-Wake word/trigger, OCR + scene-text reading (menu reading is mostly
-this), one-shot Q&A first, multi-turn dialogue later. Explicit
-user-initiated trigger only -- L3 must not run continuously (cost).
+### Epic 5 -- Conversational assistant (L3) -- PARTIALLY BUILT
+`pipeline/l3_assistant.py` (vision-chat call, `ask_about_image()`) +
+`VisionAeyeStream.ask()` (wires L3 into arbitration -- queues during an
+active hazard, resumes after it clears, speaks an honest failure
+message on a transport error rather than going silent). 10 tests
+(6 mocked unit tests + 4 integration tests proving the queue-during-
+hazard safety case). Verified live against a real image.
+
+Still open (not built):
+1. Wake word / voice trigger -- `ask()` currently takes the question as
+   a plain string argument; there's no speech-to-text or activation
+   mechanism wired in yet.
+2. OCR-specific tuning for small/dense text (a printed menu font vs a
+   general photo) -- current prompt is a generic vision-chat
+   instruction, not validated against a real menu photo yet (no menu
+   test image was available this session -- needs a real one from the
+   user to validate this specific use case, not just "can it see a
+   street scene").
+3. Multi-turn dialogue ("tell me more about the pasta") -- each `ask()`
+   call is stateless/one-shot today, no conversation history.
+4. Cost/rate limiting -- nothing currently stops a user from spamming
+   `ask()`; needs an explicit trigger debounce before this goes near
+   real hardware.
 
 ### Epic 6 -- Spatial guidance / wayfinding
 Named-target object detection + localization (different, harder

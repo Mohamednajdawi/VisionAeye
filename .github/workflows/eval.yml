@@ -38,6 +38,10 @@ jobs:
         run: python pipeline/test_arbitration.py -v
       - name: Run L2 rolling-buffer unit tests
         run: python pipeline/test_l2_buffer.py -v
+      - name: Run L3 assistant unit tests (mocked, no API key needed)
+        run: python pipeline/test_l3_assistant.py -v
+      - name: Run L3/arbitration integration tests
+        run: python pipeline/test_stream_l3_integration.py -v
 
   evaluate:
     needs: unit-tests

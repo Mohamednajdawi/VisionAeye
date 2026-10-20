@@ -55,6 +55,35 @@ into. Verified end-to-end against the real recorded frames in
 `data/video1_frames/` (not just simulated decision sequences) via
 `pipeline/real_e2e_test.py`.
 
+## What's built: the L3 on-demand assistant (menu reading, finding items)
+
+`pipeline/l3_assistant.py` -- answers a user's question about the
+current camera frame ("what's on this menu", "where's the oat milk").
+Deliberately a DIFFERENT API than L1/L2: TypeSafe's Decisions API is
+explicitly designed for calibrated structured questions
+(noul/score/choice/box), not freeform generated text (see
+https://docs.typesafe.ai/introduction/machine-learning-primer.md) --
+L3 needs a real vision-chat model (OpenRouter chat completions,
+default `openai/gpt-4o-mini`) instead. Verified live against a real
+image (correctly reported no readable signage was present, rather than
+hallucinating one).
+
+`VisionAeyeStream.ask(image_b64, question)` wires L3 into arbitration:
+a question answered while NO hazard is active speaks immediately; a
+question answered WHILE a hazard is active is queued and resumes
+automatically once the hazard clears -- exactly the same contract
+already proven for a mid-sentence L3 interrupt. An L3 transport
+failure speaks an honest "couldn't process that" rather than going
+silent, since a silent failure on a question the user explicitly asked
+is worse than an honest failure message.
+
+10 tests total: `pipeline/test_l3_assistant.py` (6, fully mocked --
+success, whitespace stripping, missing-cost-field tolerance, malformed
+response -> L3Error not a raw KeyError, HTTP error, network error) and
+`pipeline/test_stream_l3_integration.py` (4, the critical safety case:
+a question asked during an active hazard is queued, not spoken over
+it).
+
 ## Repo layout
 
 ```
